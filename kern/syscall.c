@@ -11,6 +11,7 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/time.h>
 
 //#define DBG 1
 
@@ -154,13 +155,8 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
         return r;
     }
 
-    if (tf == 0)
-        return -1;
+    user_mem_assert(env, tf, sizeof(struct Trapframe), PTE_U);
     
-    if (tf->tf_eip >= UTOP 
-            || tf->tf_esp >= UTOP)
-        return -1;
-
 #ifdef DBG
     cprintf("sys_env_set_trapframe: before tf_eflags=%x\n", tf->tf_eflags);
 #endif
@@ -510,6 +506,14 @@ sys_ipc_recv(void *dstva)
     cprintf("SYS_ipc_recv: return from sched_yield!!!!!!!!\n");
 #endif
 	return 0;
+}
+
+// Return the current time.
+static int
+sys_time_msec(void)
+{
+	// LAB 6: Your code here.
+	panic("sys_time_msec not implemented");
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
