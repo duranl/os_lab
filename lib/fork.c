@@ -77,8 +77,9 @@ duppage(envid_t envid, unsigned pn)
 
 	// LAB 4: Your code here.
     // Current page is writable or copy-on-write page
-    if ((uvpt[pn] & PTE_W) == PTE_W 
-            || (uvpt[pn] & PTE_COW) == PTE_COW) {
+    if (!(uvpt[pn] & PTE_SHARE)
+            && ((uvpt[pn] & PTE_W) == PTE_W 
+            || (uvpt[pn] & PTE_COW) == PTE_COW)) {
         int perm = (uvpt[pn] & PTE_SYSCALL & (~PTE_W)) | PTE_COW;
         r = sys_page_map(0, (void *)(pn * PGSIZE), 
                 envid, (void *)(pn * PGSIZE), perm);
@@ -89,7 +90,7 @@ duppage(envid_t envid, unsigned pn)
         if (r < 0)
             panic("duppage: %e", r);
 
-    } else { // Not writable or COW page
+    } else { // Sharable or not writable or COW page
         r = sys_page_map(0, (void *)(pn * PGSIZE), 
                 envid, (void *)(pn * PGSIZE), uvpt[pn] & PTE_SYSCALL);
         if (r < 0)

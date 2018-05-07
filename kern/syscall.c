@@ -12,6 +12,8 @@
 #include <kern/console.h>
 #include <kern/sched.h>
 
+//#define DBG 1
+
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
 // Destroys the environment on memory errors.
@@ -56,10 +58,6 @@ sys_env_destroy(envid_t envid)
 
 	if ((r = envid2env(envid, &e, 1)) < 0)
 		return r;
-	if (e == curenv)
-		cprintf("[%08x] exiting gracefully\n", curenv->env_id);
-	else
-		cprintf("[%08x] destroying %08x\n", curenv->env_id, e->env_id);
 	env_destroy(e);
 	return 0;
 }
@@ -132,6 +130,50 @@ sys_env_set_status(envid_t envid, int status)
 
 	return 0;
 //	panic("sys_env_set_status not implemented");
+}
+
+// Set envid's trap frame to 'tf'.
+// tf is modified to make sure that user environments always run at code
+// protection level 3 (CPL 3) with interrupts enabled.
+//
+// Returns 0 on success, < 0 on error.  Errors are:
+//	-E_BAD_ENV if environment envid doesn't currently exist,
+//		or the caller doesn't have permission to change envid.
+static int
+sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
+{
+	// LAB 5: Your code here.
+	// Remember to check whether the user has supplied us with a good
+	// address!
+	struct Env *env;
+    int r;
+    if ((r = envid2env(envid, &env, true)) < 0) {
+#ifdef DBG
+        cprintf("sys_env_set_trapframe: envid2env() failed!\n");
+#endif
+        return r;
+    }
+
+    if (tf == 0)
+        return -1;
+    
+    if (tf->tf_eip >= UTOP 
+            || tf->tf_esp >= UTOP)
+        return -1;
+
+#ifdef DBG
+    cprintf("sys_env_set_trapframe: before tf_eflags=%x\n", tf->tf_eflags);
+#endif
+
+    tf->tf_eflags |= FL_IF;
+    tf->tf_eflags &= (~FL_IOPL_3);
+    tf->tf_cs |= 0x3;   // Set the CPL to 3 
+#ifdef DBG
+    cprintf("sys_env_set_trapframe: after tf_eflags=%x\n", tf->tf_eflags);
+#endif
+    env->env_tf = *tf;
+    return 0;
+    //panic("sys_env_set_trapframe not implemented");
 }
 
 // Set the page fault upcall for 'envid' by modifying the corresponding struct
@@ -341,48 +383,87 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
+#ifdef DBG
+    cprintf("sys_ipc_try_send: src_envid=%d, dst_envid=%d, value=%d, srcva=%x, perm=%u\n", curenv->env_id, envid, value, srcva, perm);
+#endif
+
     struct Env *dst_env;
-    if (envid2env(envid, &dst_env, 0) < 0)
+    if (envid2env(envid, &dst_env, 0) < 0) {
+#ifdef DBG
+        cprintf("sys_ipc_try_send: envid2env failed!\n");
+#endif
         return -E_BAD_ENV;
+    }
+
     // To check whether the target is requesting the message
-    if (dst_env->env_ipc_recving == false)
+    if (dst_env->env_ipc_recving == false) {
+#ifdef DBG
+        cprintf("sys_ipc_try_send: dst_env is not requesting!\n");
+#endif
         return -E_IPC_NOT_RECV;
+    }
 
-    if ((uintptr_t)dst_env->env_ipc_dstva < UTOP) {
-        if ((uintptr_t)srcva < UTOP) {
-            if ((uintptr_t)srcva % PGSIZE != 0)
-                return -E_INVAL;
+    dst_env->env_ipc_perm = 0;
+    if ((uintptr_t)dst_env->env_ipc_dstva < UTOP
+            && (uintptr_t)srcva < UTOP) {
+        if ((uintptr_t)srcva % PGSIZE != 0) {
+#ifdef DBG
+            cprintf("sys_ipc_try_send: srcva not page aligned!\n"); 
+#endif
+            return -E_INVAL;
+        }
             
-            pte_t *pte;
-            struct PageInfo *srcpg = page_lookup(curenv->env_pgdir, 
+        pte_t *pte;
+        struct PageInfo *srcpg = page_lookup(curenv->env_pgdir, 
                     srcva, &pte);
-            if (srcpg == NULL)
-                return -E_INVAL;
-
-            if ((perm & (~PTE_SYSCALL)) != 0
-                    || !(perm & (PTE_P | PTE_U)))
-                return -E_INVAL;
-
-            if ((perm & PTE_W) && !(*pte & PTE_W))
-                return -E_INVAL;
-            
-            if (page_insert(dst_env->env_pgdir, srcpg, 
-                        dst_env->env_ipc_dstva, perm) < 0)
-                return -E_NO_MEM;
-
-            dst_env->env_ipc_perm = perm;
+        if (srcpg == NULL) {
+#ifdef DBG
+            cprintf("sys_ipc_try_send: page_lookup() failed!\n");
+#endif
+            return -E_INVAL;
         }
 
-    } else {
-        dst_env->env_ipc_perm = 0;
+        if ((perm & (~PTE_SYSCALL)) != 0
+                || (perm & (PTE_P | PTE_U)) != (PTE_P | PTE_U)) {
+#ifdef DBG
+            cprintf("sys_ipc_try_send: perm is invalid!\n");
+            return -E_INVAL;
+#endif
+        }
+
+        if ((perm & PTE_W) && !(*pte & PTE_W)) {
+#ifdef DBG
+            cprintf("sys_ipc_try_send: perm is PTE_W but src is not!\n");
+#endif
+            return -E_INVAL;
+        }
+            
+        if (page_insert(dst_env->env_pgdir, srcpg, 
+                    dst_env->env_ipc_dstva, perm) < 0) {
+#ifdef DBG
+            cprintf("sys_ipc_try_send: page_insert() failed!\n");
+#endif
+            return -E_NO_MEM;
+        }
+
+       dst_env->env_ipc_perm = perm;
+
     }
 
     dst_env->env_ipc_value = value;
     dst_env->env_ipc_from = curenv->env_id; 
     dst_env->env_ipc_recving = false;
+    // Use the %eax to return the result of this syscall
+    dst_env->env_tf.tf_regs.reg_eax = 0;
     // Mark the env runnable again because the ipc succeeds
     dst_env->env_status = ENV_RUNNABLE;
 
+#ifdef DBG
+    cprintf("sys_ipc_try_send: dst_env: id=%d, ipc_value=%d, ipc_from=%d, ipc_perm=%d, status=%d\n", 
+            dst_env->env_id, dst_env->env_ipc_value, dst_env->env_ipc_from, dst_env->env_ipc_perm,
+            dst_env->env_status);
+#endif
+            
     return 0;
 //	panic("sys_ipc_try_send not implemented");
 }
@@ -403,18 +484,31 @@ sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
     // Check the dstva is valid
-    if ((uintptr_t)dstva < UTOP || (uintptr_t)dstva % PGSIZE != 0)
+#ifdef DBG
+    cprintf("sys_ipc_recv: src_envid=%d, dstva=%x\n", curenv->env_id, dstva);
+#endif
+
+    if ((uintptr_t)dstva < UTOP && (uintptr_t)dstva % PGSIZE != 0) {
+#ifdef DBG
+        cprintf("sys_ipc_recv: dstva is not invalid!!\n");
+#endif
         return -E_INVAL;
+    }
 
     curenv->env_ipc_dstva = dstva;
     // To mark that this env request a message
     curenv->env_ipc_recving = true;
     curenv->env_status = ENV_NOT_RUNNABLE;
-    // Use the %eax to return the result of this syscall
-    curenv->env_tf.tf_regs.reg_eax = 0;
+    //curenv->env_tf.tf_regs.reg_eax = 0;
+#ifdef DBG
+    cprintf("sys_ipc_recv: ipc_recving=%d, status=%d\n", curenv->env_ipc_recving, curenv->env_status);
+#endif
     // Give up the CPU
     sched_yield();
 //	panic("sys_ipc_recv not implemented");
+#ifdef DBG
+    cprintf("SYS_ipc_recv: return from sched_yield!!!!!!!!\n");
+#endif
 	return 0;
 }
 
@@ -454,6 +548,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_ipc_recv((void *)a1);
         case SYS_ipc_try_send:
             return sys_ipc_try_send((envid_t)a1, a2, (void *) a3, (int)a4);
+        case SYS_env_set_trapframe:
+            return sys_env_set_trapframe((envid_t)a1,(struct Trapframe *)a2);
 	default:
 		return -E_INVAL;
 	}
