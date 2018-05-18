@@ -12,6 +12,7 @@
 #include <kern/console.h>
 #include <kern/sched.h>
 #include <kern/time.h>
+#include <kern/e1000.h>
 
 //#define DBG 1
 
@@ -515,6 +516,14 @@ sys_time_msec(void)
 	// LAB 6: Your code here.
 	return time_msec();
     //panic("sys_time_msec not implemented");
+}
+
+// Transmite a network packet
+static int
+sys_net_tx(uint8_t *addr, size_t length)
+{
+    user_mem_assert(curenv, addr, length, PTE_U);
+    return e1000_tx(addr, length);
 }
 
 // Dispatches to the correct kernel function, passing the arguments.

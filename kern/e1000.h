@@ -147,7 +147,7 @@
 #define E1000_RAH_AV  0x80000000        /* Receive descriptor valid */
 
 #define TXRING_LEN 64
-#define RXRING_LEN 128
+#define RXRING_LEN 64
 #define DATA_SIZE 4096
 
 /* Macro */
@@ -194,5 +194,5 @@ volatile uintptr_t *e1000;
 
 /* Function prototype */
 int e1000_attach(struct pci_func *);
-
+int e1000_tx(uint8_t *addr, size_t length);
 #endif	// JOS_KERN_E1000_H
