@@ -29,7 +29,7 @@ static void e1000_init() {
                         VALUEATMASK(1, E1000_TCTL_PSP) |
                         VALUEATMASK(0x10, E1000_TCTL_CT) |
                         VALUEATMASK(0x40, E1000_TCTL_COLD);
-    e1000[E1000_TIPG] = VALUEATMASK(10, E1000_TIPG_IPGT)|
+    e1000[E1000_TIPG] = VALUEATMASK(10, E1000_TIPG_IPGT) |
                         VALUEATMASK(8, E1000_TIPG_IPGR1) |
                         VALUEATMASK(6, E1000_TIPG_IPGR2);
 }
@@ -50,14 +50,14 @@ int e1000_attach(struct pci_func *pcif) {
     return 0;
 }
 
-int e1000_tx(uint8_t *addr, size_t length) {
+int e1000_tx(uint8_t *va, size_t length) {
     uint32_t tail = e1000[E1000_TDT];
     struct e1000_tx_desc *tail_desc = &tx_desc_buf[tail];
     if (tail_desc->upper.fields.status != E1000_TXD_STAT_DD) {
         return -1;
     }
     length = length > DATA_SIZE ? DATA_SIZE : length;
-    memmove(&tx_data_buf[tail], addr, length);
+    memmove(&tx_data_buf[tail], va, length);
     tail_desc->lower.flags.length = length;
     tail_desc->upper.fields.status = 0;
     tail_desc->lower.data |= (E1000_TXD_CMD_RS |

@@ -520,10 +520,10 @@ sys_time_msec(void)
 
 // Transmite a network packet
 static int
-sys_net_tx(uint8_t *addr, size_t length)
+sys_net_tx(uint8_t *va, size_t length)
 {
-    user_mem_assert(curenv, addr, length, PTE_U);
-    return e1000_tx(addr, length);
+    user_mem_assert(curenv, va, length, PTE_U);
+    return e1000_tx(va, length);
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -566,6 +566,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_env_set_trapframe((envid_t)a1,(struct Trapframe *)a2);
         case SYS_time_msec:
             return sys_time_msec();
+        case SYS_net_tx:
+            return sys_net_tx((uint8_t*) a1, a2);
 	default:
 		return -E_INVAL;
 	}
