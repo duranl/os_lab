@@ -129,3 +129,8 @@ sys_net_tx(void* va, size_t length)
     return syscall(SYS_net_tx, 0, (uint32_t)va, length, 0, 0, 0);
 }
 
+int
+sys_net_recv(void *va)
+{
+    return syscall(SYS_net_recv, 0, (uint32_t)va, 0, 0, 0, 0);
+}

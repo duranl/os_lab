@@ -526,6 +526,13 @@ sys_net_tx(uint8_t *va, size_t length)
     return e1000_tx(va, length);
 }
 
+// Receive a network packet
+static int
+sys_net_recv(uint8_t *va)
+{
+    user_mem_assert(curenv, va, NET_DATA_SIZE, PTE_U);
+    return e1000_recv(va);
+}
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -568,6 +575,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_time_msec();
         case SYS_net_tx:
             return sys_net_tx((uint8_t*) a1, a2);
+        case SYS_net_recv:
+            return sys_net_recv((uint8_t*) a1);
 	default:
 		return -E_INVAL;
 	}

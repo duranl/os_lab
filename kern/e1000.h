@@ -147,8 +147,8 @@
 #define E1000_RAH_AV  0x80000000        /* Receive descriptor valid */
 
 #define TXRING_LEN 64
-#define RXRING_LEN 64
-#define DATA_SIZE 4096
+#define RXRING_LEN 128
+#define NET_DATA_SIZE 1518
 
 /* Macro */
 #define VALUEATMASK(value, mask) ((value) * ((mask) & ~((mask) << 1)))
@@ -186,7 +186,7 @@ struct e1000_rx_desc {
 
 /* Data */
 struct e1000_data {
-    uint8_t data[DATA_SIZE];
+    uint8_t data[NET_DATA_SIZE];
 };
 
 volatile uintptr_t *e1000;
@@ -194,5 +194,6 @@ volatile uintptr_t *e1000;
 
 /* Function prototype */
 int e1000_attach(struct pci_func *);
-int e1000_tx(uint8_t *addr, size_t length);
+int e1000_tx(uint8_t *va, size_t length);
+int e1000_recv(uint8_t *va);
 #endif	// JOS_KERN_E1000_H
