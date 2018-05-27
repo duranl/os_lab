@@ -19,7 +19,7 @@ input(envid_t ns_envid)
         while ((nsipcbuf.pkt.jp_len = sys_net_recv(nsipcbuf.pkt.jp_data)) < 0) {
             sys_yield();
         }
-        sys_yield();
         ipc_send(ns_envid, NSREQ_INPUT, &nsipcbuf, PTE_U | PTE_W | PTE_P);
+        sys_yield();
     }
 }
