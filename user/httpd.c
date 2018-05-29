@@ -232,17 +232,15 @@ send_file(struct http_request *req)
 	// LAB 6: Your code here.
     if ((fd = open(req->url, O_RDONLY)) < 0)  {
         send_error(req, 404);
+        return -1;
     }
 
     struct Stat stat;
-    if (fstat(fd, &stat) < 0) {
+    if (fstat(fd, &stat) < 0 || stat.st_isdir) {
         send_error(req, 404);
+        goto end;
     }
 
-    if (stat.st_isdir) {
-        send_error(req, 404);
-    }
-   
     file_size = stat.st_size;
 //	panic("send_file not implemented");
 
